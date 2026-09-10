@@ -78,6 +78,11 @@ Invoke-C3DCommand -Command C3DINFO -LogFile C:\Temp\c3d\c3dinfo.out -DoneMarker 
 `Add-C3DTrustedPath` whitelists just your build folder for `NETLOAD`. **Don't** set
 `SECURELOAD=0` — that turns off code-path verification globally.
 
+Once the addin settles, an **ApplicationPlugins bundle** removes step 3 entirely: register
+the commands with `LoadOnAutoCADStartup="False"` + `LoadOnCommandInvocation="True"` and the
+DLL demand-loads the first time one is typed, costing nothing in a normal session. Recipe
+in [docs/FINDINGS.md](docs/FINDINGS.md#skip-netload-entirely-an-applicationplugins-bundle).
+
 ## Reconnaissance beats guessing
 
 The API surface is large and sparsely documented, so both included habits are worth

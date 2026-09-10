@@ -169,6 +169,87 @@ $doc.SetVariable('TRUSTEDPATHS', "$tp;$binDir")
 AutoCAD holds a lock on a loaded assembly for the life of the session, so an edit-rebuild
 loop needs a **new assembly name per build** (or an app restart).
 
+### Skip NETLOAD entirely: an ApplicationPlugins bundle
+
+Once the addin is stable, registering it with the autoloader removes the `NETLOAD` /
+`TRUSTEDPATHS` dance from every session. Drop a folder into
+`%APPDATA%\Autodesk\ApplicationPlugins\YourApp.bundle`:
+
+```
+YourApp.bundle\
+  PackageContents.xml
+  Contents\          <- the build output
+```
+
+```xml
+<ComponentEntry AppName="Civil3dAutomation" Version="1.0.0"
+                ModuleName="./Contents/Civil3dAutomation.dll"
+                LoadOnAutoCADStartup="False"
+                LoadOnCommandInvocation="True">
+  <Commands GroupName="C3DAUTO">
+    <Command Global="C3DINFO" Local="C3DINFO" />
+  </Commands>
+</ComponentEntry>
+```
+
+`LoadOnAutoCADStartup="False"` with `LoadOnCommandInvocation="True"` is the combination
+worth having: the commands are registered at startup but the DLL is **not loaded until one
+is actually typed**, so the addin costs nothing in a normal session. Verified: Civil 3D
+still starts in 6 s with the bundle installed, and `C3DINFO` resolves with no `NETLOAD` and
+no `TRUSTEDPATHS` entry.
+
+Two practical notes:
+
+- Make `Contents` a **directory junction** to the build output
+  (`New-Item -ItemType Junction`) rather than a copy, so a rebuild propagates instead of
+  the bundle silently going stale.
+- A new `[CommandMethod]` must also be added to `<Commands>` **and Civil 3D restarted**, or
+  the autoloader has no reason to demand-load it. `PackageContents.xml` must be UTF-8
+  **without BOM**.
+
+Uninstall is deleting the one folder, which also makes "is the bundle to blame?" a cheap
+experiment — see below.
+
+## Civil 3D will not start: check licensing before blaming a plug-in
+
+**Symptom:** `acad.exe` is in the process list but sits at roughly **32 MB with no window
+and almost no CPU**, and COM never becomes available. It never gets as far as opening a
+drawing.
+
+That is the licensing/identity handshake, not the drawing and not an addin. It follows
+`Stop-Process -Force` on Civil 3D: force-killing leaves Autodesk's identity stack wedged.
+The tell is `AdskIdentityManager` burning huge CPU — observed at **991 CPU-seconds** and
+still climbing — while `acad.exe` itself is idle.
+
+These are user-level helpers that Autodesk respawns on demand; the licence is untouched:
+
+```powershell
+Get-Process acad -EA SilentlyContinue | Stop-Process -Force
+foreach ($n in 'AdskIdentityManager','AdskAccessUIHost','AdskAccessCore') {
+    Get-Process $n -EA SilentlyContinue | Stop-Process -Force
+}
+Start-Sleep 8    # AdskIdentityManager should come back at ~0s CPU
+```
+
+Civil 3D then started in 18 s, and 6 s on the following run.
+
+**Diagnose in this order** — cheapest and most likely first:
+
+1. `acad.exe` at ~32 MB with no window → licensing. Bounce the helpers above.
+2. `%LOCALAPPDATA%\Autodesk\C3D <ver>\Logs\AeccLog-<date>.log` for the last drawing it
+   really opened, and the plugin log for initialised/terminated pairs — a clean init
+   followed seconds later by a clean termination means it started and *quit*, not hung.
+3. Only then suspect an `ApplicationPlugins` bundle, and test it by **moving the bundle
+   aside and relaunching** rather than reasoning about it.
+
+That ordering is written from getting it backwards: a freshly installed bundle was assumed
+to be the cause, and removing it changed nothing — Civil 3D still would not start, because
+the real problem was licensing. Two launch cycles wasted on the wrong suspect.
+
+**Prefer a graceful close.** Use COM `Documents.Close()` / quit rather than
+`Stop-Process -Force` unless the process is genuinely deadlocked. Force-killing is what
+causes this, and it also strands `.dwl`/`.dwl2` lock files beside the drawing.
+
 ## Target framework
 
 AutoCAD/Civil 3D 2027 hosts **.NET 10** (`coreclr.dll 10.0` in the process). Build addins
