@@ -1,0 +1,20 @@
+# build output
+bin/
+obj/
+*.user
+
+# local machine config (contains absolute paths)
+hw2.paths.txt
+paths.txt
+
+# runtime logs written by the addin
+*.out
+
+# CAD artefacts - never commit drawings or plots
+*.dwg
+*.dwt
+*.bak
+*.dwl
+*.dwl2
+*.pdf
+*.sv$

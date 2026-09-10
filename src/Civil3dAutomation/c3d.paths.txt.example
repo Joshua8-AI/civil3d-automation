@@ -1,0 +1,3 @@
+# Copy to c3d.paths.txt next to the built DLL. Absolute paths, Windows style.
+out=C:\Temp\c3d
+symbols=C:\path\to\block\library
