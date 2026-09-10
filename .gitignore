@@ -7,8 +7,9 @@ obj/
 hw2.paths.txt
 paths.txt
 
-# runtime logs written by the addin
+# runtime logs and local scratch written by the addin / harness
 *.out
+out/
 
 # CAD artefacts - never commit drawings or plots
 *.dwg
