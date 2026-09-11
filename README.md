@@ -72,7 +72,8 @@ cp src/Civil3dAutomation/c3d.paths.txt.example `
 # 3. drive it  (powershell.exe, NOT pwsh)
 Import-Module ./harness/C3D.psm1
 $app = Get-C3DApp
-$doc = Initialize-C3DDocument -App $app    # MCP plug-ins deadlock at zero documents
+$doc = Initialize-C3DDocument -App $app    # older MCP plug-in builds deadlock at zero
+                                           # documents; see docs/FINDINGS.md
                                            # (Ensure-C3DDocument still works as an alias)
 Invoke-C3DNetload -Dll (Resolve-Path ./src/Civil3dAutomation/bin/Release/net10.0-windows/Civil3dAutomation.dll)
 Invoke-C3DCommand -Command C3DINFO -LogFile C:\Temp\c3d\c3dinfo.out -DoneMarker done

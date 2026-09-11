@@ -46,9 +46,11 @@ function Initialize-C3DDocument {
     .SYNOPSIS
       Make sure at least one drawing is open and return the active document.
     .DESCRIPTION
-      The MCP plug-in deadlocks permanently when zero drawings are open, and several
-      APIs need a document context. Open one through COM before anything else, from
-      -TemplatePath when given, otherwise the default template.
+      Civil3D-mcp plug-in builds before Sacred-G/Civil3D-mcp#8 deadlock permanently
+      when zero drawings are open (fixed builds fail fast with CIVIL3D.NO_DRAWING and
+      can open a drawing themselves), and several APIs need a document context either
+      way. Open one through COM before anything else, from -TemplatePath when given,
+      otherwise the default template.
       Ensure-C3DDocument is kept as an alias for existing scripts.
     #>
     [CmdletBinding()]

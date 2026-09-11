@@ -33,14 +33,22 @@ $aecc = $acad.GetInterfaceObject('AeccXUiLand.AeccApplication.13.9')   # 13.9 = 
 
 Find the suffix for your release under `HKLM:\SOFTWARE\Classes\AeccXUiLand.AeccApplication*`.
 
-### The MCP plugin deadlocks with zero documents open
+### The MCP plugin deadlocks with zero documents open (fixed upstream-bound, 2026-09-11)
 
-Every action is validated by an internal `getDrawingInfo` call. With no drawing open that
-call never returns, and because the plugin has a single-threaded queue, **the whole server
-wedges** — including the request that would have opened the first drawing. Observed stuck
-at 233s and never recovering.
+Every approval-gated action is validated by an internal `getDrawingInfo` call. With no
+drawing open that call never returned, and because the plugin serializes host work behind
+a single gate, **the whole server wedged** — including the request that would have opened
+the first drawing. Observed stuck at 233s and never recovering.
 
-Bootstrap a document through COM *before* touching the MCP server:
+Root cause (found from this report): the plugin took its execution gate and then hopped
+into `ExecuteInCommandContextAsync`, whose callback never fires without a document; the
+null-document check lived inside that callback. The fix — null check before the hop, a
+cancellation-aware gate, and an `Application.Idle` hop for `new` — is in
+[Sacred-G/Civil3D-mcp#8](https://github.com/Sacred-G/Civil3D-mcp/pull/8) and on the
+[Joshua8-AI fork](https://github.com/Joshua8-AI/Civil3D-mcp) default branch, verified live:
+`info` fails in 0–2 ms with `CIVIL3D.NO_DRAWING` and `civil3d_drawing new` opens a drawing.
+
+On older plugin builds, bootstrap a document through COM *before* touching the MCP server:
 
 ```powershell
 $acad.Documents.Add($templatePath)
