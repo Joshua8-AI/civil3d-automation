@@ -3,13 +3,15 @@ bin/
 obj/
 *.user
 
-# local machine config (contains absolute paths)
-hw2.paths.txt
-paths.txt
+# local machine config (contains absolute paths); the .example copy is tracked
+*.paths.txt
 
 # runtime logs and local scratch written by the addin / harness
 *.out
 out/
+
+# Invoke-Pester -CI writes its NUnit report here
+testResults.xml
 
 # CAD artefacts - never commit drawings or plots
 *.dwg

@@ -7,7 +7,7 @@ on Windows 11. Everything here was verified against a running instance, not take
 
 | Channel | Reach | Notes |
 |---|---|---|
-| MCP plugin (TCP, port 8757) | Drawings, COGO points, point groups, surfaces, corridors, plan production | No styles, no description keys, no layers, no blocks, no plotting |
+| MCP plugin (TCP, port 8757) | Drawings, COGO points, point groups, surfaces, corridors, plan production | Styles are read-only (list/get); no style or label-style authoring, no description keys, no layers, no blocks, no plotting |
 | AutoCAD COM (`AutoCAD.Application`) | Anything expressible as a command, plus the AutoCAD object model | **Windows PowerShell 5.1 only** |
 | Civil 3D .NET (`AeccDbMgd`, via `NETLOAD`) | The whole Civil 3D API | Some of it will crash the host — see below |
 
@@ -208,7 +208,13 @@ Two practical notes:
   **without BOM**.
 
 Uninstall is deleting the one folder, which also makes "is the bundle to blame?" a cheap
-experiment — see below.
+experiment — see below. **Careful with the junction:** `Remove-Item -Recurse` follows it
+and wipes the build output it points at. Delete the junction itself with the
+non-recursive `[System.IO.Directory]::Delete($path)` first, then the rest of the folder.
+
+This recipe is now scripted: `scripts/install-bundle.ps1` creates the junction, writes
+`PackageContents.xml` (all three commands registered, UTF-8 without BOM) and
+`-Uninstall` removes the bundle without touching the build output.
 
 ## Civil 3D will not start: check licensing before blaming a plug-in
 

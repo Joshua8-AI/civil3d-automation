@@ -54,8 +54,12 @@ namespace Civil3dAutomation
                 LabelStyle = "Point# and Elevation", PointStyle = "Ground Shot" },
         };
 
-        // Field codes differ between imperial and metric drawings (Uft vs Um), so read
-        // them off the template's own styles rather than hard-coding them.
+        // Unit-dependent field codes (elevation is Uft in imperial drawings, Um in metric)
+        // come from the template's own stock styles rather than being hard-coded. No stock
+        // style carries a Raw Description component, so that one is derived from the
+        // "Description Only" style's Full Description component: the two fields share the
+        // same modifier syntax and differ only in name. The constants are last-resort
+        // fallbacks for a template with none of the stock styles.
         const string FALLBACK_NUM = "<[Point Number(Sn)]>";
         const string FALLBACK_RAW = "<[Raw Description(CP)]>";
 
@@ -72,10 +76,11 @@ namespace Civil3dAutomation
                 var labels = MakeLabelStyles(db, cdoc);
                 var styles = MakePointStyles(db, cdoc, Example);
                 MakeKeySet(db, styles, labels, Example);
-                Log("done");
             }
             catch (System.Exception ex) { Log("FATAL " + ex.Message); Log(ex.StackTrace); }
-            finally { L.Flush(); L.Close(); }
+            // The harness polls the log for "done". Emit it on the failure path as well, or
+            // a FATAL run is indistinguishable from a hung one until the harness times out.
+            finally { Log("done"); L.Close(); }
         }
 
         static void MakeLayers(Database db, FeatureCode[] table)
@@ -148,7 +153,7 @@ namespace Civil3dAutomation
             Log("--- label styles ---");
             var coll = cdoc.Styles.LabelStyles.PointLabelStyles.LabelStyles;
             var map = new Dictionary<string, ObjectId>();
-            string fNum, fElev, fRaw = FALLBACK_RAW;
+            string fNum, fElev, fRaw;
             double stockH = 0;
 
             using (var tr = db.TransactionManager.StartTransaction())
@@ -160,6 +165,7 @@ namespace Civil3dAutomation
                 }
                 fNum = FieldFrom(tr, coll, "Point Number Only", FALLBACK_NUM);
                 fElev = FieldFrom(tr, coll, "Elevation Only", null);
+                fRaw = FieldFrom(tr, coll, "Description Only", FALLBACK_RAW).Replace("Full Description", "Raw Description");
                 foreach (ObjectId id in coll)
                 {
                     var s = (LabelStyle)tr.GetObject(id, OpenMode.ForRead);
@@ -174,6 +180,7 @@ namespace Civil3dAutomation
             }
             Log("  number field : " + fNum);
             Log("  elev   field : " + fElev);
+            Log("  raw    field : " + fRaw);
             Log("  stock height : " + stockH + "   (units are DRAWING units: feet in a ft drawing)");
 
             // NOTE the separator. Civil 3D field codes contain '|', e.g.
@@ -190,7 +197,9 @@ namespace Civil3dAutomation
 
             foreach (var kv in want)
             {
-                if (kv.Value.Any(v => v.EndsWith(SEP) || v.Split(new[] { SEP }, StringSplitOptions.None)[1] == null))
+                // A null field code (stock style missing from the template) concatenates to
+                // "Name::" -- nothing after the separator -- so EndsWith is the whole test.
+                if (kv.Value.Any(v => v.EndsWith(SEP)))
                 { Log("  !! skipping " + kv.Key + " (missing field code)"); continue; }
                 try
                 {

@@ -66,9 +66,11 @@ namespace Civil3dAutomation
                         sw.WriteLine("=== NAMED BLOCKS: " + nb + " ===");
                         tr.Commit();
                     }
-                    sw.WriteLine("done");
                 }
                 catch (System.Exception ex) { sw.WriteLine("ERROR " + ex.Message); sw.WriteLine(ex.StackTrace); }
+                // The harness polls the log for this sentinel. It must appear on the error
+                // path too, or a failed command looks exactly like a hung one until timeout.
+                finally { sw.WriteLine("done"); }
             }
         }
 
@@ -78,24 +80,28 @@ namespace Civil3dAutomation
         {
             using (var sw = Config.OpenLog("c3dapi.out"))
             {
-                var typeName = Config.Get("api_type", "Autodesk.Civil.DatabaseServices.Styles.PointStyle");
-                var asm = typeof(PointStyle).Assembly;
-                var t = asm.GetTypes().FirstOrDefault(x => x.FullName == typeName || x.Name == typeName);
-                sw.WriteLine("=== " + typeName + " ===");
-                if (t == null) { sw.WriteLine("(not found)"); sw.WriteLine("done"); return; }
-
-                foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance).OrderBy(x => x.Name))
+                try
                 {
-                    string extra = "";
-                    try { if (p.PropertyType.IsEnum) extra = " = " + string.Join(",", Enum.GetNames(p.PropertyType)); }
-                    catch { }
-                    sw.WriteLine("  P " + p.Name + " : " + p.PropertyType.Name + extra);
+                    var typeName = Config.Get("api_type", "Autodesk.Civil.DatabaseServices.Styles.PointStyle");
+                    var asm = typeof(PointStyle).Assembly;
+                    var t = asm.GetTypes().FirstOrDefault(x => x.FullName == typeName || x.Name == typeName);
+                    sw.WriteLine("=== " + typeName + " ===");
+                    if (t == null) { sw.WriteLine("(not found)"); return; }
+
+                    foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance).OrderBy(x => x.Name))
+                    {
+                        string extra = "";
+                        try { if (p.PropertyType.IsEnum) extra = " = " + string.Join(",", Enum.GetNames(p.PropertyType)); }
+                        catch { }
+                        sw.WriteLine("  P " + p.Name + " : " + p.PropertyType.Name + extra);
+                    }
+                    foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                                       .Where(x => !x.IsSpecialName && x.DeclaringType == t).OrderBy(x => x.Name))
+                        sw.WriteLine("  M " + (m.IsStatic ? "static " : "") + m.Name + "(" +
+                            string.Join(",", m.GetParameters().Select(z => z.ParameterType.Name)) + ")");
                 }
-                foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                                   .Where(x => !x.IsSpecialName && x.DeclaringType == t).OrderBy(x => x.Name))
-                    sw.WriteLine("  M " + (m.IsStatic ? "static " : "") + m.Name + "(" +
-                        string.Join(",", m.GetParameters().Select(z => z.ParameterType.Name)) + ")");
-                sw.WriteLine("done");
+                catch (System.Exception ex) { sw.WriteLine("ERROR " + ex.Message); }
+                finally { sw.WriteLine("done"); }
             }
         }
     }

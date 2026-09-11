@@ -1,5 +1,5 @@
 ;;; ---------------------------------------------------------------------------
-;;; Build a titled sheet: layout, viewport, border, north arrow, scale bar.
+;;; Build a titled sheet: layout + viewport + border + title block + north arrow.
 ;;;
 ;;; Deliberately uses entmake + MVIEW rather than the .NET API. Creating and
 ;;; configuring a paper-space Viewport through .NET while that layout is current

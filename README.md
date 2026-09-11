@@ -18,7 +18,7 @@ Civil 3D has three automation surfaces and none of them covers everything:
 
 | Channel | Reaches | Doesn't reach |
 |---|---|---|
-| MCP plug-in (TCP) | drawings, COGO points, point groups, surfaces | styles, description keys, layers, blocks, plotting |
+| MCP plug-in (TCP) | drawings, COGO points, point groups, surfaces | authoring styles or label styles (it can only list/inspect them), description keys, layers, blocks, plotting |
 | AutoCAD COM | any command, the AutoCAD object model | **point styles and label styles are `null`** |
 | .NET add-in (`NETLOAD`) | the whole Civil 3D API | some of it crashes the process |
 
@@ -51,9 +51,11 @@ src/Civil3dAutomation/   NETLOAD add-in (net10.0-windows)
   Inspect.cs             C3DINFO / C3DAPI - read-only reconnaissance
   SurveySetup.cs         layers, bulk block import, point + label styles, description keys
 harness/C3D.psm1         attach over COM, NETLOAD, run commands, detect deadlock
-lisp/sheet.lsp           layout + viewport + border + north arrow + scale bar
+scripts/install-bundle.ps1  ApplicationPlugins bundle (junction to the build output)
+lisp/sheet.lsp           layout + viewport + border + title block + north arrow
 lisp/plot.lsp            the verified -PLOT prompt chain, and how to rediscover it
 docs/FINDINGS.md         everything learned the hard way
+tests/                   Pester tests for the harness, xunit tests for Config
 ```
 
 ## Getting started
@@ -70,7 +72,8 @@ cp src/Civil3dAutomation/c3d.paths.txt.example `
 # 3. drive it  (powershell.exe, NOT pwsh)
 Import-Module ./harness/C3D.psm1
 $app = Get-C3DApp
-$doc = Ensure-C3DDocument -App $app        # MCP plug-ins deadlock at zero documents
+$doc = Initialize-C3DDocument -App $app    # MCP plug-ins deadlock at zero documents
+                                           # (Ensure-C3DDocument still works as an alias)
 Invoke-C3DNetload -Dll (Resolve-Path ./src/Civil3dAutomation/bin/Release/net10.0-windows/Civil3dAutomation.dll)
 Invoke-C3DCommand -Command C3DINFO -LogFile C:\Temp\c3d\c3dinfo.out -DoneMarker done
 ```
@@ -78,10 +81,20 @@ Invoke-C3DCommand -Command C3DINFO -LogFile C:\Temp\c3d\c3dinfo.out -DoneMarker 
 `Add-C3DTrustedPath` whitelists just your build folder for `NETLOAD`. **Don't** set
 `SECURELOAD=0` — that turns off code-path verification globally.
 
-Once the addin settles, an **ApplicationPlugins bundle** removes step 3 entirely: register
-the commands with `LoadOnAutoCADStartup="False"` + `LoadOnCommandInvocation="True"` and the
-DLL demand-loads the first time one is typed, costing nothing in a normal session. Recipe
-in [docs/FINDINGS.md](docs/FINDINGS.md#skip-netload-entirely-an-applicationplugins-bundle).
+Once the addin settles, an **ApplicationPlugins bundle** removes step 3 entirely:
+
+```powershell
+pwsh -File scripts\install-bundle.ps1              # install (any PowerShell will do)
+pwsh -File scripts\install-bundle.ps1 -Uninstall   # remove; build output is untouched
+```
+
+The bundle registers `C3DINFO`, `C3DAPI` and `C3DSURVEYSETUP` with
+`LoadOnAutoCADStartup="False"` + `LoadOnCommandInvocation="True"`, so the DLL demand-loads
+the first time one is typed and costs nothing in a normal session. `Contents\` is a
+directory junction to the build output, so a rebuild propagates without reinstalling.
+Restart Civil 3D after installing, and after adding a new `[CommandMethod]` (it must also be
+listed in the manifest). Background in
+[docs/FINDINGS.md](docs/FINDINGS.md#skip-netload-entirely-an-applicationplugins-bundle).
 
 ## Reconnaissance beats guessing
 
@@ -132,6 +145,21 @@ COM call can clear it — only real keystrokes: `Reset-C3DCommandLine`.
 `SurveySetup.cs` carries a **two-row illustrative** feature-code table. It's a worked
 example of the mechanism (layer + marker + label + description keys per code), not a
 survey coding standard — replace it with your own.
+
+## Tests
+
+Nothing here needs Civil 3D running.
+
+```powershell
+Invoke-Pester -Path tests -CI              # harness: pwsh or powershell.exe, Pester 5
+dotnet test tests\Civil3dAutomation.Tests  # Config parsing (compiles Config.cs alone, plain net10.0)
+```
+
+## Related
+
+- [Civil3D-mcp](https://github.com/Joshua8-AI/Civil3D-mcp) — the MCP server for Civil 3D.
+  This repo covers the channels MCP can't reach: style and label-style authoring,
+  description keys, layers, blocks, sheets and plotting.
 
 ## Licence
 
