@@ -30,10 +30,20 @@ Notes:
 
 ## Live (Civil 3D open)
 
-Not automated. The harness functions are exercised by hand: `Get-C3DApp`,
-`Initialize-C3DDocument`, `Invoke-C3DNetload`, then `Invoke-C3DCommand C3DINFO` and
-check `out\c3dinfo.out` ends with `done` (on an error it now ends with an `ERROR …`
-line **and** `done`, and `Invoke-C3DCommand` raises a non-terminating error).
+Not automated; driven through the harness under `powershell.exe`. Last run
+2026-09-11 on Civil 3D 2027, fresh session after `scripts\install-bundle.ps1`:
+
+| step | result |
+|---|---|
+| `Get-C3DApp` → `Initialize-C3DDocument` | attached, `Drawing1.dwg` |
+| `Invoke-C3DCommand C3DINFO -LogFile out\c3dinfo.out` | returned in 1 s, 47 lines (24 point styles …), ends with `done`, no `ERROR`/`FATAL` |
+| `Invoke-C3DCommand C3DAPI -LogFile out\c3dapi.out` | returned in 1 s, 73 lines (`PointStyle` properties and methods), ends with `done` |
+| which DLL the process loaded | `%APPDATA%\Autodesk\ApplicationPlugins\Civil3dAutomation.bundle\Contents\Civil3dAutomation.dll` — demand-loaded by the first command via the bundle's `LoadOnCommandInvocation`, no NETLOAD |
+
+On an error the log now ends with an `ERROR …` line **and** `done`, and
+`Invoke-C3DCommand` raises a non-terminating error instead of waiting out the timeout.
 
 Restart Civil 3D after (re)installing the bundle; a session started while the bundle
-was absent does not register it.
+was absent does not register it. From a script, launch with the shortcut's arguments
+(`acad.exe /ld "…\AecBase.dbx" /p "<<C3D_Imperial>>" /product C3D /language en-US`);
+expect a transient message box and ~3 minutes before the session is usable.
