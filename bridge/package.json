@@ -1,0 +1,46 @@
+{
+  "name": "civil3d-revit-bridge",
+  "version": "0.1.0",
+  "description": "MCP server that bridges Autodesk Civil 3D and Revit: shared-coordinate alignment, surface-to-toposolid, site utilities, and consistency checks.",
+  "main": "build/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "civil3d-revit-bridge": "./build/index.js"
+  },
+  "scripts": {
+    "clean": "rimraf build",
+    "prebuild": "npm run clean",
+    "build": "tsc",
+    "start": "node ./build/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "files": [
+    "build"
+  ],
+  "keywords": [
+    "mcp",
+    "civil3d",
+    "revit",
+    "autodesk",
+    "bim",
+    "shared-coordinates"
+  ],
+  "author": "J. H. Smith",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "fast-check": "^4.3.0",
+    "rimraf": "^5.0.10",
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.0"
+  }
+}
