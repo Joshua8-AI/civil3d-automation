@@ -56,6 +56,21 @@ lisp/sheet.lsp           layout + viewport + border + title block + north arrow
 lisp/plot.lsp            the verified -PLOT prompt chain, and how to rediscover it
 docs/FINDINGS.md         everything learned the hard way
 tests/                   Pester tests for the harness, xunit tests for Config
+bridge/                  Civil 3D <-> Revit MCP bridge (Node/TypeScript), see bridge/README.md
+```
+
+## Civil 3D ↔ Revit bridge
+
+[`bridge/`](bridge/README.md) is a separate MCP server (Node, stdio) that talks to the
+Civil 3D MCP plug-in (port 8757) and the Revit MCP add-in (8080–8089) at the same time,
+and moves data between them: aligning Revit shared coordinates to the Civil 3D drawing,
+turning a Civil 3D surface into a Revit toposolid, bringing site utilities into Revit as
+pipes, and checking finished-floor vs. grade and setbacks. It only ever writes to Revit,
+and every write is a preview first and an explicit apply second.
+
+```powershell
+cd bridge; npm ci; npm run build; npm test
+claude mcp add civil3d-revit-bridge -s user -- node C:\dev\civil3d-automation\bridge\build\index.js
 ```
 
 ## Getting started
@@ -154,6 +169,7 @@ Nothing here needs Civil 3D running.
 ```powershell
 Invoke-Pester -Path tests -CI              # harness: pwsh or powershell.exe, Pester 5
 dotnet test tests\Civil3dAutomation.Tests  # Config parsing (compiles Config.cs alone, plain net10.0)
+cd bridge; npm ci; npm test                # bridge: transforms, plugin clients (fake TCP), tools
 ```
 
 ## Related

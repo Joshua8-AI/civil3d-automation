@@ -9,7 +9,8 @@ How this repo is verified, and the last recorded results (2026-09-11, `main`).
 | Add-in compiles | `dotnet build src\Civil3dAutomation\Civil3dAutomation.csproj -c Release` | 0 warnings, 0 errors |
 | Config parsing | `dotnet test tests\Civil3dAutomation.Tests` | 8 passed |
 | Harness | `Invoke-Pester -Path tests -CI` under both `pwsh` and `powershell.exe` | 10 passed in each |
-| Lint | `Invoke-ScriptAnalyzer -Path . -Recurse` | 0 findings |
+| Lint | `Invoke-ScriptAnalyzer -Path . -Recurse` (skip `bridge\node_modules` if it is installed: run it on `harness`, `scripts`, `tests` instead) | 0 findings |
+| Bridge | `cd bridge; npm ci; npm run build; npm test` — details in [bridge/TESTING.md](bridge/TESTING.md) | 126 passed in 10 files (2026-09-26) |
 | Ignore rules | `git check-ignore -v src/Civil3dAutomation/c3d.paths.txt` matches; `c3d.paths.txt.example` does not | as expected |
 | Bundle install/uninstall | `scripts\install-bundle.ps1`, then `-Uninstall` | junction created then removed; `bin\Release\net10.0-windows\Civil3dAutomation.dll` still present afterwards |
 
