@@ -36,7 +36,10 @@ export const CIVIL3D_METHODS_USED = {
     "getPressureNetworkInfo",
     "reportParcels",
   ],
-  /** Proposed; not implemented by the plugin at the time of writing. */
+  /**
+   * Added in Civil3D-mcp `feature/bridge-support-commands`; older plugin
+   * builds lack them, so bridge_status probes them and callers fall back.
+   */
   pending: ["getSurfaceTinVertices", "getParcelGeometry", "getDrawingUnits"],
 } as const;
 

@@ -76,6 +76,18 @@ export class FakeCivil implements Civil3DApi {
       const tin = d.surface.tin;
       this.handlers.getSurfaceTinVertices = () => ({ surfaceName: d.surface.name, vertices: tin, totalVertexCount: tin.length, truncated: false });
     }
+    if (d.drawingUnits) {
+      const units = d.drawingUnits;
+      this.handlers.getDrawingUnits = () => units;
+    }
+    if (d.parcelGeometry) {
+      // Mirrors the plugin's getParcelGeometry shape (Civil3D-mcp feature/bridge-support-commands).
+      this.handlers.getParcelGeometry = (p) => {
+        const hit = d.parcels.find((x) => x.name.toLowerCase() === String(p.parcelName).toLowerCase());
+        if (!hit) throw new PluginError(`civil3d: Parcel '${p.parcelName}' was not found`, "civil3d", "CIVIL3D.OBJECT_NOT_FOUND", -32004, "getParcelGeometry");
+        return { siteName: p.siteName, name: hit.name, vertices: hit.vertices, closed: true, units: d.linearUnits, lengthUnit: "Feet", geometrySource: "baseCurve:Polyline" };
+      };
+    }
   }
 
   async call<T = any>(method: string, params: Record<string, unknown> = {}): Promise<T> {
@@ -104,6 +116,10 @@ export interface FakeCivilData {
   gravity: Array<{ name: string; pipes: any[]; structures: any[] }>;
   pressure: Array<{ name: string; pipes: any[] }>;
   parcels: Array<{ name: string; vertices: Array<{ x: number; y: number }> }>;
+  /** When set, the fake implements getDrawingUnits and returns this report. */
+  drawingUnits?: Record<string, unknown>;
+  /** When true, the fake implements getParcelGeometry over `parcels`. */
+  parcelGeometry?: boolean;
 }
 
 function inBox(p: { x: number; y: number }, b: { minX: number; minY: number; maxX: number; maxY: number }) {

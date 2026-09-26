@@ -10,9 +10,10 @@ localhost TCP, the same plugins that
 [Civil3D-mcp](https://github.com/Sacred-G/Civil3D-mcp) and
 [revit-mcp-server](https://github.com/LuDattilo/revit-mcp-server) drive.
 
-> **Status:** v0.1.0. Verified offline against fakes of both plugins (126 tests). **It has not been
+> **Status:** v0.1.0. Verified offline against fakes of both plugins (135 tests). **It has not been
 > run against live Civil 3D or Revit.** Several Revit commands it depends on are still being added to
-> the Revit plugin, and three Civil 3D commands are only proposed so far (see
+> the Revit plugin, and the three new Civil 3D commands exist only on the Civil3D-mcp
+> `feature/bridge-support-commands` branch so far (see
 > [Plugin command dependencies](#plugin-command-dependencies)).
 
 ## Architecture
@@ -71,10 +72,12 @@ to the Civil 3D grid axes. This is the convention of Revit's `ProjectPosition.An
 Revit and compares it to the target. If the Revit plugin uses the opposite sign, the verification fails
 and says so. The convention has **not yet been checked against live Revit**.
 
-**Units.** Every conversion is explicit (`src/core/units.ts`). The Civil 3D plugin reports only `feet` or
-`meters`: it reports US survey feet as `feet`. The bridge therefore assumes international feet (0.3048 m,
-the same as Revit when it links a DWG in feet) and warns every time. Pass
-`drawingUnits: "usSurveyFeet"` when the drawing really is in US survey feet. At a state-plane easting of
+**Units.** Every conversion is explicit (`src/core/units.ts`). When the Civil 3D plugin has
+`getDrawingUnits`, the bridge uses its `lengthUnit`, which keeps `USSurveyFeet` apart from `Feet`, and passes
+on the plugin's warnings (for example INSUNITS in feet while Civil 3D's drawing settings convert with the US
+survey foot). Older plugin builds report only `feet` or `meters` and report US survey feet as `feet`; the
+bridge then assumes international feet (0.3048 m, the same as Revit when it links a DWG in feet) and warns
+every time. Pass `drawingUnits: "usSurveyFeet"` to override either way. At a state-plane easting of
 6,000,000 ft the two feet differ by 3.66 m. Revit's wire unit is the millimetre.
 
 ### Safety model
@@ -129,7 +132,7 @@ reads `get_project_location` back from Revit and pushes probe points through bot
 | param | type | notes |
 |---|---|---|
 | `surfaceName` | string | Civil 3D surface |
-| `sampling` | `grid` (default) \| `tin` | `tin` needs the pending `getSurfaceTinVertices` |
+| `sampling` | `grid` (default) \| `tin` | `tin` needs the plugin's `getSurfaceTinVertices` (Civil3D-mcp `feature/bridge-support-commands`) |
 | `gridSpacing` | number | default: region area / maxPoints; coarsened automatically if needed |
 | `boundary` | `{coordinateSystem: civil3d\|revitShared\|revitInternal, points:[{x,y}]}` | default: the surface bounding box |
 | `maxPoints` | int 4..20000 = 2000 | TIN vertices are decimated by plan binning |
@@ -194,14 +197,15 @@ Returns `{overall: pass|fail|incomplete|skipped, checks:[{check, status, summary
   results back by coordinates.
 - *COGO point by name.* The bridge pages through `listCogoPoints`.
 
-**Pending (proposed contracts; the bridge already calls them and falls back or explains when they are missing):**
+**Added in Civil3D-mcp `feature/bridge-support-commands` (not yet live-verified; older plugin builds lack
+them, so `bridge_status` probes them and the bridge falls back or explains when they are missing):**
 
 | command | contract | why |
 |---|---|---|
-| `getSurfaceTinVertices` | `{name, boundary?:[{x,y}], maxPoints?}` → `{surfaceName, vertices:[{x,y,z}], totalVertexCount, truncated, units}` | `sampling: "tin"`; no existing command lists TIN points |
-| `getParcelGeometry` | `{siteName, parcelName}` → `{name, vertices:[{x,y}], closed, units}` | `reportParcels` reads vertices through reflection (`GetBoundary`/`GetVertices`) and may return none |
-| `getDrawingUnits` | `{}` → `{insunits:"Feet"\|"USSurveyFeet"\|"Meters"\|..., linearUnits}` | `linearUnits` merges US survey feet into `feet` |
-| *(extension)* `getPipeNetwork` pipe data | add `startPoint:{x,y,z}`, `endPoint:{x,y,z}` (centreline) and `startInvert`, `endInvert` | removes the structure-XY approximation; the bridge already prefers these fields when present |
+| `getSurfaceTinVertices` | `{name, boundary?:[{x,y}], maxPoints? (1–100,000, default 50,000)}` → `{surfaceName, surfaceType:"TIN"\|"Grid", vertices:[{x,y,z}], totalVertexCount, returnedVertexCount, truncated, decimation, boundaryApplied, units, lengthUnit}` | `sampling: "tin"`; no other command lists TIN points. Vertices of visible triangles only; over `maxPoints` the plugin decimates deterministically (XY-sorted stride) |
+| `getParcelGeometry` | `{siteName, parcelName, maxArcSegmentAngle?}` → `{name, vertices:[{x,y}], closed:true, boundaryVertices:[{x,y,bulge}], segments, area, perimeter, units, lengthUnit, ...}` | `reportParcels` reads vertices through reflection (`GetBoundary`/`GetVertices`) and may return none. `vertices` has arcs densified and does not repeat the closing point |
+| `getDrawingUnits` | `{}` → `{insunits (raw int), insunitsName, lengthUnit:"Feet"\|"USSurveyFeet"\|"Meters"\|..., metersPerUnit, linearUnits, civilLinearUnit, civilImperialToMetricConversion, civilLengthUnit, unitsConsistent, warnings, ...}` | `linearUnits` merges US survey feet into `feet`; the bridge uses `lengthUnit` when this command exists |
+| *(extension)* `getPipeNetwork` pipe data | adds `startPoint:{x,y,z}`, `endPoint:{x,y,z}` (centreline), `startInvert`, `endInvert`, `innerDiameter`, `outerDiameter` (and crowns, heights, wall thickness, shape) | removes the structure-XY approximation; the bridge prefers these fields when present |
 
 ### Revit plugin (RevitMCPSDK, port 8080–8089)
 

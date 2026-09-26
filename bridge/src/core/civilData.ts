@@ -6,7 +6,7 @@
 
 import type { Civil3DApi } from "../clients/civil3d.js";
 import { PluginError } from "../clients/tcpRpc.js";
-import { resolveDrawingUnits, type LinearUnit, type ResolvedDrawingUnits } from "./units.js";
+import { resolveDrawingUnits, resolveDrawingUnitsFromReport, type LinearUnit, type ResolvedDrawingUnits } from "./units.js";
 import type { Vec2, Vec3 } from "./transform.js";
 
 export interface DrawingContext {
@@ -40,7 +40,9 @@ export async function getDrawingContext(civil: Civil3DApi, drawingUnits?: Linear
   } catch (e) {
     warnings.push(`getCoordinateSystemInfo failed: ${(e as Error).message}`);
   }
-  const units = resolveDrawingUnits(str(info.linearUnits) ?? str(info.units) ?? str(cs.linearUnits), drawingUnits);
+  const units =
+    (await tryDrawingUnitsReport(civil, drawingUnits)) ??
+    resolveDrawingUnits(str(info.linearUnits) ?? str(info.units) ?? str(cs.linearUnits), drawingUnits);
   const code = str(cs.name) ?? str(info.coordinateSystem);
   if (!code) {
     warnings.push("The Civil 3D drawing has no coordinate system assigned; drawing coordinates are treated as the shared (survey) frame as-is.");
@@ -52,6 +54,24 @@ export async function getDrawingContext(civil: Civil3DApi, drawingUnits?: Linear
     units,
     warnings: [...warnings, ...units.warnings],
   };
+}
+
+/**
+ * Units from getDrawingUnits { insunits, insunitsName, lengthUnit, warnings, ... },
+ * whose lengthUnit ("Feet" | "USSurveyFeet" | "Meters" | ...) distinguishes US
+ * survey feet from international feet. Returns null on plugin builds that do
+ * not have the command, so the caller falls back to the legacy linearUnits.
+ */
+async function tryDrawingUnitsReport(civil: Civil3DApi, override?: LinearUnit): Promise<ResolvedDrawingUnits | null> {
+  let report: Record<string, any>;
+  try {
+    report = await civil.call<Record<string, any>>("getDrawingUnits");
+  } catch (e) {
+    if (e instanceof PluginError && e.isMethodNotFound) return null;
+    throw e;
+  }
+  const warnings = Array.isArray(report.warnings) ? report.warnings.filter((w: unknown): w is string => typeof w === "string") : [];
+  return resolveDrawingUnitsFromReport({ lengthUnit: str(report.lengthUnit), warnings }, override);
 }
 
 export type CivilPointSpec =
@@ -179,9 +199,13 @@ export async function sampleSurface(civil: Civil3DApi, surfaceName: string, poin
 }
 
 /**
- * PENDING plugin command. Proposed contract:
- *   getSurfaceTinVertices { name, boundary?: [{x,y}], maxPoints?: number }
- *     -> { surfaceName, vertices: [{x,y,z}], totalVertexCount, truncated, units }
+ * Plugin command added in Civil3D-mcp `feature/bridge-support-commands`
+ * (older plugin builds answer METHOD_NOT_FOUND):
+ *   getSurfaceTinVertices { name, boundary?: [{x,y}], maxPoints?: number (1..100000, default 50000) }
+ *     -> { surfaceName, surfaceType: "TIN"|"Grid", vertices: [{x,y,z}], totalVertexCount,
+ *          returnedVertexCount, truncated, decimation, boundaryApplied, units, lengthUnit }
+ * Vertices come from visible triangles only; over maxPoints the plugin
+ * decimates deterministically (XY-sorted stride).
  */
 export async function getSurfaceTinVertices(
   civil: Civil3DApi,
@@ -372,13 +396,15 @@ export async function collectPipes(civil: Civil3DApi, q: PipeQuery): Promise<{ p
 }
 
 /**
- * Parcel boundary in drawing units. Tries the PENDING getParcelGeometry
- * command first, then the existing reportParcels(includeCoordinates), whose
- * vertex extraction is reflection-based and may return no vertices on some
- * Civil 3D versions.
+ * Parcel boundary in drawing units. Tries getParcelGeometry first (added in
+ * Civil3D-mcp `feature/bridge-support-commands`), then the existing
+ * reportParcels(includeCoordinates), whose vertex extraction is
+ * reflection-based and may return no vertices on some Civil 3D versions.
  *
- * Proposed contract:
- *   getParcelGeometry { siteName, parcelName } -> { name, vertices:[{x,y}], closed:true, units }
+ * Contract:
+ *   getParcelGeometry { siteName, parcelName, maxArcSegmentAngle? }
+ *     -> { name, vertices:[{x,y}] (arcs densified, closing point not repeated), closed:true,
+ *          boundaryVertices:[{x,y,bulge}], segments, area, perimeter, units, lengthUnit, ... }
  */
 export async function getParcelBoundary(
   civil: Civil3DApi,

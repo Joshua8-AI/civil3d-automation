@@ -47,7 +47,58 @@ export interface ResolvedDrawingUnits {
 }
 
 /**
- * Resolve the Civil 3D drawing's linear unit.
+ * Map the Civil 3D plugin's `getDrawingUnits.lengthUnit` (an AutoCAD
+ * UnitsValue name such as "Feet", "USSurveyFeet" or "Meters") to a bridge
+ * unit. Returns null for units the bridge does not convert.
+ */
+export function linearUnitFromLengthUnit(lengthUnit: string | null | undefined): LinearUnit | null {
+  switch (lengthUnit) {
+    case "Feet":
+      return "feet";
+    case "USSurveyFeet":
+      return "usSurveyFeet";
+    case "Meters":
+      return "meters";
+    case "Millimeters":
+      return "millimeters";
+    case "Inches":
+      return "inches";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Resolve the drawing's linear unit from the plugin's getDrawingUnits report.
+ * Unlike the legacy `linearUnits` field, `lengthUnit` distinguishes US survey
+ * feet from international feet, so no ambiguity warning is added; the
+ * plugin's own warnings (e.g. INSUNITS disagreeing with the Civil 3D drawing
+ * settings) are passed through.
+ */
+export function resolveDrawingUnitsFromReport(
+  report: { lengthUnit: string | null; warnings?: readonly string[] },
+  override?: LinearUnit,
+): ResolvedDrawingUnits {
+  const warnings = [...(report.warnings ?? [])];
+  const mapped = linearUnitFromLengthUnit(report.lengthUnit);
+  if (override) {
+    if (mapped && mapped !== override) {
+      warnings.push(`Civil 3D reports '${report.lengthUnit}' (getDrawingUnits) but drawingUnits override '${override}' was used.`);
+    }
+    return { unit: override, source: "override", reported: report.lengthUnit, warnings };
+  }
+  if (!mapped) {
+    throw new Error(
+      `Civil 3D drawing length unit is '${report.lengthUnit ?? "unknown"}', which the bridge cannot convert safely. ` +
+        "Pass drawingUnits explicitly ('feet', 'usSurveyFeet' or 'meters').",
+    );
+  }
+  return { unit: mapped, source: "civil3d", reported: report.lengthUnit, warnings };
+}
+
+/**
+ * Resolve the Civil 3D drawing's linear unit (legacy path, used when the
+ * plugin has no getDrawingUnits command).
  *
  * The Civil 3D plugin's `linearUnits` field collapses international feet and
  * US survey feet into "feet" (see CivilObjectUtils.LinearUnits). The two

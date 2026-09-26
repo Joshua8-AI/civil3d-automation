@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { convert, fromMm, LINEAR_UNITS, MM_PER_UNIT, resolveDrawingUnits, toMm } from "../src/core/units.js";
+import {
+  convert,
+  fromMm,
+  LINEAR_UNITS,
+  linearUnitFromLengthUnit,
+  MM_PER_UNIT,
+  resolveDrawingUnits,
+  resolveDrawingUnitsFromReport,
+  toMm,
+} from "../src/core/units.js";
 
 describe("units: known answers", () => {
   it("international foot is exactly 304.8 mm", () => {
@@ -66,5 +75,35 @@ describe("resolveDrawingUnits", () => {
   it("refuses unknown units rather than guessing", () => {
     expect(() => resolveDrawingUnits("other")).toThrow(/cannot convert safely/);
     expect(() => resolveDrawingUnits(null)).toThrow();
+  });
+});
+
+describe("resolveDrawingUnitsFromReport (plugin getDrawingUnits.lengthUnit)", () => {
+  it("maps the AutoCAD UnitsValue names the plugin reports", () => {
+    expect(linearUnitFromLengthUnit("Feet")).toBe("feet");
+    expect(linearUnitFromLengthUnit("USSurveyFeet")).toBe("usSurveyFeet");
+    expect(linearUnitFromLengthUnit("Meters")).toBe("meters");
+    expect(linearUnitFromLengthUnit("Millimeters")).toBe("millimeters");
+    expect(linearUnitFromLengthUnit("Inches")).toBe("inches");
+    expect(linearUnitFromLengthUnit("Centimeters")).toBeNull();
+    expect(linearUnitFromLengthUnit(null)).toBeNull();
+  });
+  it("US survey feet and international feet resolve without the ambiguity warning", () => {
+    expect(resolveDrawingUnitsFromReport({ lengthUnit: "USSurveyFeet" })).toEqual({ unit: "usSurveyFeet", source: "civil3d", reported: "USSurveyFeet", warnings: [] });
+    expect(resolveDrawingUnitsFromReport({ lengthUnit: "Feet" })).toEqual({ unit: "feet", source: "civil3d", reported: "Feet", warnings: [] });
+  });
+  it("passes the plugin's warnings through", () => {
+    expect(resolveDrawingUnitsFromReport({ lengthUnit: "Feet", warnings: ["INSUNITS vs Civil 3D"] }).warnings).toEqual(["INSUNITS vs Civil 3D"]);
+  });
+  it("honours an override and warns when it contradicts the plugin", () => {
+    const r = resolveDrawingUnitsFromReport({ lengthUnit: "Feet" }, "usSurveyFeet");
+    expect(r).toMatchObject({ unit: "usSurveyFeet", source: "override", reported: "Feet" });
+    expect(r.warnings).toHaveLength(1);
+    expect(resolveDrawingUnitsFromReport({ lengthUnit: "USSurveyFeet" }, "usSurveyFeet").warnings).toHaveLength(0);
+  });
+  it("refuses units it cannot convert unless overridden", () => {
+    expect(() => resolveDrawingUnitsFromReport({ lengthUnit: "Centimeters" })).toThrow(/cannot convert safely/);
+    expect(() => resolveDrawingUnitsFromReport({ lengthUnit: null })).toThrow();
+    expect(resolveDrawingUnitsFromReport({ lengthUnit: null }, "meters").unit).toBe("meters");
   });
 });

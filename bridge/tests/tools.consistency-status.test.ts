@@ -3,13 +3,13 @@ import { PreviewStore } from "../src/core/previewStore.js";
 import { computeProjectPosition } from "../src/core/transform.js";
 import { runConsistency } from "../src/tools/consistency.js";
 import { runStatus } from "../src/tools/status.js";
-import { FakeCivil, FakeRevit } from "./helpers/fakes.js";
+import { defaultCivilData, FakeCivil, FakeRevit, type FakeCivilData } from "./helpers/fakes.js";
 
 const E = 6_000_000;
 const N = 2_000_000;
 
-function setup(levelElevation_mm = 304.8) {
-  const civil = new FakeCivil();
+function setup(levelElevation_mm = 304.8, civilInit: Partial<FakeCivilData> = {}) {
+  const civil = new FakeCivil(civilInit);
   const revit = new FakeRevit({
     position: computeProjectPosition({ civilBasePoint: { x: E, y: N, z: 100 }, drawingUnit: "feet", internalPoint_mm: { x: 0, y: 0, z: 0 }, angleToTrueNorth_deg: 0 }),
     surveyPoint_mm: { x: E * 304.8, y: N * 304.8, z: 100 * 304.8 },
@@ -176,5 +176,58 @@ describe("bridge_status", () => {
     expect(r.revit.projectLocationNote).toMatch(/pending/);
     expect(r.revit.pendingCommands.get_project_location).toBe("missing");
     expect(r.revit.pendingCommands.get_mep_systems).toBe("missing");
+  });
+});
+
+// Shapes from Civil3D-mcp feature/bridge-support-commands.
+const usSurveyFeetReport = {
+  insunits: 21,
+  insunitsName: "USSurveyFeet",
+  lengthUnit: "USSurveyFeet",
+  lengthUnitSource: "INSUNITS",
+  isUsSurveyFoot: true,
+  metersPerUnit: 1200 / 3937,
+  mmPerUnit: 1_200_000 / 3937,
+  linearUnits: "feet",
+  civilLinearUnit: "Feet",
+  civilImperialToMetricConversion: "UsSurveyFoot",
+  civilLengthUnit: "USSurveyFeet",
+  unitsConsistent: true,
+  warnings: [],
+};
+
+describe("plugin bridge-support commands", () => {
+  it("getDrawingUnits resolves US survey feet with no ambiguity warning, and the probes find the commands", async () => {
+    const { ctx } = setup(304.8, { drawingUnits: usSurveyFeetReport, parcelGeometry: true, surface: { ...defaultCivilData().surface, tin: [{ x: E, y: N, z: 100 }] } });
+    const r: any = await runStatus(ctx, {});
+    expect(r.civil3d.units).toMatchObject({ unit: "usSurveyFeet", source: "civil3d", reported: "USSurveyFeet" });
+    expect(r.civil3d.warnings.join(" ")).not.toMatch(/without distinguishing/);
+    expect(r.civil3d.pendingCommands).toEqual({ getSurfaceTinVertices: "available", getParcelGeometry: "available", getDrawingUnits: "available" });
+  });
+
+  it("getDrawingUnits 'Feet' is international feet without the legacy ambiguity warning; plugin warnings pass through", async () => {
+    const warning = "INSUNITS is Feet but the Civil 3D drawing settings use the US survey foot for imperial-to-metric conversion.";
+    const { ctx } = setup(304.8, {
+      drawingUnits: { ...usSurveyFeetReport, insunits: 2, insunitsName: "Feet", lengthUnit: "Feet", isUsSurveyFoot: false, unitsConsistent: false, warnings: [warning] },
+    });
+    const r: any = await runStatus(ctx, { probeCommands: false });
+    expect(r.civil3d.units).toMatchObject({ unit: "feet", source: "civil3d", reported: "Feet" });
+    expect(r.civil3d.warnings).toContain(warning);
+    expect(r.civil3d.warnings.join(" ")).not.toMatch(/without distinguishing/);
+  });
+
+  it("an explicit drawingUnits override still wins over getDrawingUnits, with a warning", async () => {
+    const { ctx } = setup(304.8, { drawingUnits: usSurveyFeetReport });
+    const r: any = await runStatus(ctx, { drawingUnits: "feet", probeCommands: false });
+    expect(r.civil3d.units).toMatchObject({ unit: "feet", source: "override", reported: "USSurveyFeet" });
+    expect(r.civil3d.warnings.join(" ")).toMatch(/override 'feet' was used/);
+  });
+
+  it("setbacks use getParcelGeometry when the plugin has it", async () => {
+    const { ctx, civil } = setup(304.8, { parcelGeometry: true });
+    const r: any = await runConsistency(ctx, { footprint, setbacks: { parcel: { siteName: "Site 1", parcelName: "Lot 1" }, default: 25 } });
+    expect(r.checks[0].status).toBe("pass");
+    expect(r.checks[0].details.parcelSource).toBe("getParcelGeometry");
+    expect(civil.methodsCalled()).not.toContain("reportParcels");
   });
 });
