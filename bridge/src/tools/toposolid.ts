@@ -9,6 +9,7 @@ import {
   BridgeRefusal,
   drawingUnitsSchema,
   errorInfo,
+  dryRunRejected,
   lazyLocation,
   polygonSchema,
   round,
@@ -181,8 +182,9 @@ export async function runToposolid(ctx: BridgeContext, rawArgs: ToposolidArgs) {
         revitDryRun = await ctx.revit.call("create_toposolid", { ...payload, dryRun: true }, 120_000);
       } catch (e) {
         const info = errorInfo(e);
-        revitDryRun = { unavailable: true, ...info };
-        warnings.push(`Revit dry run not performed: ${info.message}`);
+        revitDryRun = { unavailable: !dryRunRejected(info), ...info };
+        if (dryRunRejected(info)) blocking.push(`Revit rejected the dry run: ${info.message}`);
+        else warnings.push(`Revit dry run not performed: ${info.message}`);
       }
     }
     const rec = blocking.length === 0 ? ctx.previews.record(TOOL, rawArgs as Record<string, unknown>, payload) : null;

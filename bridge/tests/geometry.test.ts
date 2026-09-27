@@ -88,6 +88,20 @@ describe("planGrid", () => {
     for (const p of g.points.slice(4)) expect(pointInPolygon(p, square) || p.x === 0 || p.y === 0).toBe(true);
   });
 
+  it("never repeats a plan point when boundary vertices land on grid nodes", () => {
+    // Live on Civil 3D 2027 + Revit 2027: a 200 x 200 ft boundary with 10 ft spacing put the
+    // corners on grid nodes, and Revit rejected the toposolid ("Duplicate point in plan").
+    const box = [
+      { x: 4470.42, y: 3922.4 },
+      { x: 4670.42, y: 3922.4 },
+      { x: 4670.42, y: 4122.4 },
+      { x: 4470.42, y: 4122.4 },
+    ];
+    const g = planGrid({ polygon: box }, 2000, 10);
+    const keys = g.points.map((p) => `${p.x.toFixed(4)},${p.y.toFixed(4)}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
   it("coarsens an over-dense requested spacing", () => {
     const g = planGrid({ bbox: { minX: 0, minY: 0, maxX: 100, maxY: 100 } }, 100, 0.1);
     expect(g.coarsened).toBe(true);

@@ -120,6 +120,14 @@ export function errorInfo(e: unknown): { message: string; code?: string; app?: s
   return { message: e instanceof Error ? e.message : String(e) };
 }
 
+/**
+ * True when Revit ran a dry run and rejected the change (as opposed to being
+ * unreachable). A rejected dry run must block the apply: the same payload will fail.
+ */
+export function dryRunRejected(info: { code?: string }): boolean {
+  return info.code === "REVIT.COMMAND_FAILED";
+}
+
 export interface ToolResult {
   [key: string]: unknown;
   content: Array<{ type: "text"; text: string }>;

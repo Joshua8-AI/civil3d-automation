@@ -3,6 +3,7 @@ import { pointInPolygon } from "../src/core/geometry.js";
 import { PreviewStore } from "../src/core/previewStore.js";
 import { computeProjectPosition } from "../src/core/transform.js";
 import { runToposolid } from "../src/tools/toposolid.js";
+import { PluginError } from "../src/clients/tcpRpc.js";
 import { FakeCivil, FakeRevit } from "./helpers/fakes.js";
 
 const E = 6_000_000;
@@ -114,6 +115,26 @@ describe("bridge_surface_to_toposolid", () => {
     expect(r.sampling.inRegion).toBeLessThan(tin.length);
     expect(r.pointCount).toBeLessThanOrEqual(300);
     expect(r.warnings.join(" ")).toMatch(/decimated/);
+  });
+
+  it("blocks (no previewId) when Revit rejects the dry run", async () => {
+    const { ctx, revit } = setup();
+    revit.handlers.create_toposolid = () => {
+      throw new PluginError("revit: create_toposolid failed: Duplicate point in plan", "revit", "REVIT.COMMAND_FAILED", null, "create_toposolid");
+    };
+    const r: any = await runToposolid(ctx, { surfaceName: "FG", boundary: footprint, maxPoints: 60 });
+    expect(r.previewId).toBeNull();
+    expect(r.blocking.join(" ")).toMatch(/Revit rejected the dry run: .*Duplicate point/);
+  });
+
+  it("still previews (with a warning) when Revit is unreachable for the dry run", async () => {
+    const { ctx, revit } = setup();
+    revit.handlers.create_toposolid = () => {
+      throw new PluginError("revit: cannot connect", "revit", "REVIT.UNREACHABLE", null, "create_toposolid");
+    };
+    const r: any = await runToposolid(ctx, { surfaceName: "FG", boundary: footprint, maxPoints: 60 });
+    expect(r.previewId).toBeTruthy();
+    expect(r.warnings.join(" ")).toMatch(/dry run not performed/);
   });
 
   it("refuses apply if the surface changed after the preview", async () => {

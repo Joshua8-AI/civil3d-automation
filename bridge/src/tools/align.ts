@@ -22,6 +22,7 @@ import {
   civilPointSchema,
   drawingUnitsSchema,
   errorInfo,
+  dryRunRejected,
   roundVec,
   toCivilPointSpec,
   vec3Schema,
@@ -209,6 +210,7 @@ export async function runAlign(ctx: BridgeContext, rawArgs: AlignArgs) {
       revitDryRun = await ctx.revit.call("set_shared_coordinates", { ...payload, dryRun: true }, 60_000);
     } catch (e) {
       const info = errorInfo(e);
+      if (dryRunRejected(info)) throw new BridgeRefusal(`Revit rejected the dry run: ${info.message}`, common);
       revitDryRun = { unavailable: true, ...info };
       warnings.push(`Revit dry run not performed: ${info.message}`);
     }

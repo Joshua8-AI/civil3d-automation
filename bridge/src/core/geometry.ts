@@ -232,7 +232,9 @@ export function planGrid(
     pts = gridIn(b, s, polygon);
   }
   const all = polygon ? [...polygon.map((p) => ({ x: p.x, y: p.y })), ...pts] : pts;
-  return { spacing: s, points: all.slice(0, maxPoints), coarsened };
+  // A boundary vertex can land exactly on a grid node (e.g. a square boundary whose
+  // size is a multiple of the spacing); Revit rejects duplicate plan points.
+  return { spacing: s, points: dedupePlan(all, s * 1e-6).slice(0, maxPoints), coarsened };
 }
 
 /**
