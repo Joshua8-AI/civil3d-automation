@@ -70,7 +70,8 @@ to the Civil 3D grid axes. This is the convention of Revit's `ProjectPosition.An
 `Transform.CreateRotation(XYZ.BasisZ, angle)`. With a positive angle, Civil 3D grid north lies clockwise
 (east) of Revit project north. After every apply, `bridge_align_coordinates` reads the location back from
 Revit and compares it to the target. If the Revit plugin uses the opposite sign, the verification fails
-and says so. The convention has **not yet been checked against live Revit**.
+and says so. The convention was **checked against live Revit 2027.2** on 2026-09-26: at 30° an offset
+test point round-tripped to 1e-10 mm (see TESTING.md).
 
 **Units.** Every conversion is explicit (`src/core/units.ts`). When the Civil 3D plugin has
 `getDrawingUnits`, the bridge uses its `lengthUnit`, which keeps `USSurveyFeet` apart from `Feet`, and passes
@@ -197,8 +198,9 @@ Returns `{overall: pass|fail|incomplete|skipped, checks:[{check, status, summary
   results back by coordinates.
 - *COGO point by name.* The bridge pages through `listCogoPoints`.
 
-**Added in Civil3D-mcp `feature/bridge-support-commands` (not yet live-verified; older plugin builds lack
-them, so `bridge_status` probes them and the bridge falls back or explains when they are missing):**
+**Added in Civil3D-mcp `civil3d-2027-support` (live-verified on Civil 3D 2027, 2026-09-26; older plugin
+builds lack them, so `bridge_status` probes them and the bridge falls back or explains when they are
+missing):**
 
 | command | contract | why |
 |---|---|---|
@@ -214,7 +216,8 @@ sends `create_level`.
 
 **Existing:** `get_project_info` (levels in mm from the internal origin).
 
-**Pending:** being added to the Revit plugin in parallel; designed against this contract:
+**Added in revit-mcp-server `joshua8-main`** (live-verified on Revit 2027.2, 2026-09-26; write
+commands return Revit warnings in a `warnings` array instead of opening a dialog):
 
 - `get_project_location` → `{activeLocationName, surveyPoint:{eastWest_mm,northSouth_mm,elevation_mm}, projectBasePoint:{..., angleToTrueNorth_deg}, sharedTransform:{origin_mm:{x,y,z}, rotation_deg}, siteLatitude, siteLongitude}`
 - `set_shared_coordinates` `{eastWest_mm, northSouth_mm, elevation_mm, angleToTrueNorth_deg, internalPoint_mm?, locationName?, dryRun?}`

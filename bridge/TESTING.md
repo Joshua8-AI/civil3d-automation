@@ -7,7 +7,7 @@ How the bridge is verified, and the last recorded results (2026-09-26, `main`, N
 | check | command | last result |
 |---|---|---|
 | Type check + build | `npm run build` | 0 errors |
-| All tests | `npm test` | 10 files, 135 tests passed (~2 s; 126 before the getDrawingUnits/getParcelGeometry adapter tests, 2026-09-26) |
+| All tests | `npm test` | 10 files, 138 tests passed (~2 s; 126 → 135 with the getDrawingUnits/getParcelGeometry adapter tests → 138 with the live-run regressions, 2026-09-26) |
 | stdio smoke | pipe `initialize` + `tools/list` into `node build/index.js` | server info `civil3d-revit-bridge 0.1.0`; the 5 tools listed |
 | Graceful failure | `tools/call bridge_status` with both apps closed | `ok:false`; both plugins reported `ECONNREFUSED`; Revit port 8081 found from `%APPDATA%\...\Addins\2027\revit_mcp_plugin\mcp-port.txt` |
 
@@ -32,16 +32,23 @@ convention. They can also flip the sign (`angleSign = -1`) or drop the pending c
 
 ## Live (Civil 3D and Revit open)
 
-**Not run yet.** Nothing has been executed against a live Civil 3D or Revit. Before relying on the bridge,
-check these by hand:
+Run 2026-09-26 against Civil 3D 2027 (plugin from Civil3D-mcp `civil3d-2027-support` @ `35b5600`,
+tutorial drawing `Pipe Networks-3.dwg`: feet, no CRS, EG TIN surface, one gravity network of 11
+pipes / 12 structures) and Revit 2027.2 (add-in from revit-mcp-server `joshua8-main` @ `f6c3058`,
+scratch copy of `Snowdon Towers Sample Plumbing.rvt`). Driven over real MCP stdio; each preview and
+its apply in one server session (previews are per session by design).
 
-1. `bridge_status` reports both apps, the right drawing units and CRS, and the Revit levels.
-2. On a sample model, `bridge_align_coordinates` with `rotation: {source: "explicit", angleToTrueNorth_deg: 30}`.
-   Apply it, then check that `verification.pass` is true and that Revit's *Manage > Coordinates > Report
-   Shared Coordinates* at the internal point shows the Civil 3D base point. **This confirms the rotation
-   sign.**
-3. A Civil 3D pipe's `getPipeNetwork` endpoint XY matches its structures (the composed-geometry
-   assumption), and its diameter is in drawing units.
-4. `reportParcels(includeCoordinates)` returns real vertices on Civil 3D 2026/2027. If it does not,
-   implement `getParcelGeometry`.
-5. `create_toposolid` / `create_pipe` in `coordinateSystem: "shared"` land on the linked Civil 3D DWG.
+| tool | result |
+|---|---|
+| `bridge_status` | 210 ms; both apps; feet from `getDrawingUnits`; `getSurfaceTinVertices`, `getParcelGeometry`, `getDrawingUnits` all `available` |
+| `bridge_align_coordinates` explicit point (Structure (1) rim) → Revit internal origin, 0° | preview 1.0 s, apply 1.1 s; `verification.pass`, max delta 0.0004 mm; Revit's "survey point is outside the current coordinate reference system" warning returned in the result (no dialog) |
+| same at **30°** | `verification.pass`, offset test point round-trips to 1e-10 mm, Revit reports `angleToTrueNorth_deg: 30` — **rotation sign confirmed** |
+| `bridge_surface_to_toposolid` `sampling: "tin"`, 200 × 200 ft boundary | 4 TIN vertices in the window (coarse EG); toposolid committed |
+| `bridge_surface_to_toposolid` `sampling: "grid"`, 10 ft | **bug:** boundary corners duplicated grid nodes, Revit rejected the dry run, yet the preview issued a `previewId`. Fixed in `0821c30` (dedupe + rejected dry run blocks). After: 403 points, ±30,480 mm extent, applied in 0.2 s; "toposolids overlap" returned in `warnings` |
+| `bridge_utilities_to_revit` `mode: "report"` | 11 pipes, `geometrySource: pipe startPoint/endPoint`, 18" = 457.2 mm, inverts = centreline − D/2 |
+| `bridge_utilities_to_revit` `mode: "create"` (Sanitary, L1 - Block 43) | 11 Revit pipes; the first starts at internal (0, 0, −1206.5) mm = Structure (1) centreline 3.958 ft below the rim base point |
+| `bridge_check_consistency` (footprint, FFE vs EG, alignment) | 79 ms; alignment `pass` (0 ft); FFE `fail` (level 651.894 ft vs grade up to 653.091 ft) — correct for this arbitrary layout |
+
+Not exercised live: `sampling: "tin"` on a dense surface, setbacks from real parcels (Pipe Networks-3
+has none; `getParcelGeometry` itself was checked on Pipe Networks-1A — outer loop only for parcels
+with holes), `twoPoints` rotation, `civil3dNorth` rotation on a drawing with a CRS, US survey feet.

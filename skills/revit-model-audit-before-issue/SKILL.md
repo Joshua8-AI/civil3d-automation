@@ -14,8 +14,8 @@ called. This skill is read-only on the live model. Every call below is a read or
   If its tools fail to connect, ask the user to click it.
 - Revit blocks every MCP command while a dialog is open. If calls hang or time out, ask the user to
   close dialogs and return Revit to an idle state.
-- Do **not** call `say_hello` to test the connection: it opens a dialog, which then blocks
-  everything. Use `get_project_info {compact:true}` instead.
+- To test the connection use `get_project_info {compact:true}`: it needs Revit's API context, so
+  it also tells you whether Revit is free. `say_hello` only proves the socket is up.
 - Official `revit` server: first `get_running_revit_instances`; use the returned process ID as
   `revitInstanceId` on every call, and confirm the document name with the user. Its lengths are in
   **feet**; `revit-write` uses **millimetres**.

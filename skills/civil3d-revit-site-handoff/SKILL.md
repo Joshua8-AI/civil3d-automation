@@ -39,7 +39,8 @@ arguments are **drawing units** unless the name ends in `_mm`.
    - Preview: review the `set_shared_coordinates` payload, `before`, the move distance and the
      round-trip check. Revit's dry-run result is included; stop if it was rejected.
    - Apply with `apply:true, previewId`. Then `verification.pass` **must be `true`**. `false` →
-     report the errors (possibly the rotation sign convention) and stop. `null` → the read-back
+     report the errors and stop (the rotation sign was verified live at 30° on Revit 2027.2, so
+     suspect units or a moved base point first). `null` → the read-back
      failed; run `bridge_check_consistency {alignment:{civil3dPoint, revitReference:"surveyPoint"}}`
      and only continue when that passes.
 3. **Surface → toposolid.** `bridge_surface_to_toposolid {surfaceName, ...}`.
