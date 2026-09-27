@@ -57,6 +57,7 @@ lisp/plot.lsp            the verified -PLOT prompt chain, and how to rediscover 
 docs/FINDINGS.md         everything learned the hard way
 tests/                   Pester tests for the harness, xunit tests for Config
 bridge/                  Civil 3D <-> Revit MCP bridge (Node/TypeScript), see bridge/README.md
+skills/                  Claude Code workflow skills for the Civil 3D / Revit MCP servers, see skills/README.md
 ```
 
 ## Civil 3D ↔ Revit bridge
