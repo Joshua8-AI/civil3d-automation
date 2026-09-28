@@ -21,6 +21,10 @@
   (setvar "FILEDIA" 0)
   (setvar "BACKGROUNDPLOT" 0)
   (setvar "CTAB" layout)
+  ;; Regenerate before plotting: a Civil 3D profile view that is only visible through this
+  ;; layout's viewport plotted without its profile lines when several layouts were plotted
+  ;; in one run (Civil 3D 2027).
+  (command "_.REGENALL")
   (command "_.-PLOT"
            "_Y"          ; detailed plot configuration?
            layout        ; layout name

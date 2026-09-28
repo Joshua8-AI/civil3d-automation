@@ -48,8 +48,13 @@
   (command "_.PSPACE")
   (command "_.REGEN")
 
-  (setq px (car (getvar "LIMMAX"))
-        py (cadr (getvar "LIMMAX")))
+  ;; Paper-space (0,0) is the corner of the PRINTABLE area, not of the sheet. LIMMIN is the
+  ;; sheet corner relative to it (negative margins) and LIMMAX the opposite sheet corner, so
+  ;; the printable area is LIMMAX + LIMMIN. Using LIMMAX alone put the border past the
+  ;; printable edge (DWG To PDF ARCH D: 35.80 x 23.33 vs printable 35.61 x 22.66 in) and the
+  ;; top border and north arrow were clipped in the plot.
+  (setq px (+ (car (getvar "LIMMAX")) (car (getvar "LIMMIN")))
+        py (+ (cadr (getvar "LIMMAX")) (cadr (getvar "LIMMIN"))))
   (setq u   (if (> px 50.0) 25.4 1.0))     ; >50 means the sheet is in millimetres
   (setq mpu (/ mpi u))                      ; model units per PAPER unit
   (c3d:log (strcat "printable " (rtos px 2 2) " x " (rtos py 2 2)

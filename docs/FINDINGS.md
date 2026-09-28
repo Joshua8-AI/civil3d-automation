@@ -69,6 +69,27 @@ key sets and point groups are fully available; styles are not:
 So any workflow that needs point styles or label styles has to go through a `NETLOAD`ed
 .NET addin. There is no COM path.
 
+### What COM *can* do on 2027 (`AeccXUiLand.AeccApplication.13.9`), and how
+
+Verified 2026-09-28 building a road profile/sections drawing end to end:
+
+| Task | Works | How |
+|---|---|---|
+| TIN surface | yes | `Surfaces.AddTinSurface(creationData)`, `creationData = GetInterfaceObject("AeccXLand.AeccTinCreationData.13.9")` (Name, Layer, BaseLayer, Style, Description) |
+| Add contour data | yes, **with a typed array** | `surface.Contours.Add(entities, desc, weedDist, weedAngle, supplementDist, midOrdinate)`. From PowerShell an `object[]` of polylines fails with "Value does not fall within the expected range"; pass `[Runtime.InteropServices.DispatchWrapper[]]` (one wrapper per entity) |
+| Alignment from polyline | yes, late-bound | `AlignmentsSiteless` throws *not implemented*; use `site.Alignments` via `[__ComObject].InvokeMember('AddFromPolyline', InvokeMethod, …, @(name, layer, polyline.ObjectID, style, labelSet, erase, addCurves))`. `Get-Member` on that collection also throws *not implemented* — the type info is missing, IDispatch works |
+| Elevation analysis ranges | yes | `surface.SurfaceAnalysis.ElevationAnalysis.CalculateElevationRegions(n, false)`, then set each region's Min/MaximumElevation. **No area per range** is exposed (neither here nor in .NET) |
+| Profile views | **no** | the alignment's `ProfileViews` collection has no usable `Add`; use the .NET API (`ProfileView.Create(alignmentId, point, name, bandSetId, styleId)`) |
+| Style of an existing object | yes | ActiveX from LISP: `(vlax-put-property obj 'Style "Design Profile")` accepts the style *name* |
+| Profile view style tuning | yes | `style.GraphStyle.VerticalExaggeration`, `style.BottomAxis.MajorTickStyle` (`Interval`, `Size`, `Height`, `Text` — set `Text` to `""` to drop an axis's labels when a band already labels stations) |
+| Lock a profile view's station/elevation range | **no** | `StationLocked`/`ElevationLocked` silently stay false; `StationStart`/`ElevationMin` then fail |
+
+AutoLISP gotchas from the same job:
+- `ZOOM` → `Center` → the magnification prompt rejects a fraction like `1/50XP` and re-prompts (a
+  script then hangs at the prompt); pass a decimal: `0.02XP`.
+- There is no `vla-get-number` for viewports; the viewport id for `CVPORT` is DXF group 69.
+- `(vlax-put-property viewportOrView 'StationLocked 1)` — booleans must be `:vlax-true`.
+
 ## Getting results back out
 
 `SendCommand` is fire-and-forget — no return value, no stdout. The reliable trick is to
